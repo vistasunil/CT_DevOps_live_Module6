@@ -334,5 +334,3 @@ Add the following **.yml** file as shown.
 ## Ansible Vault
 
 [Document for Ansible Vault](https://www.redhat.com/sysadmin/introduction-ansible-vault)
-
-### Step 1:
