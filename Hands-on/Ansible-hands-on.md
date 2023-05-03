@@ -45,13 +45,13 @@ sudo apt install ansible
 
 **Ansible hands-on documentation has been divided into 3 segments.**
 
-**A.** Creating Ansible Playbook
-**B.** Creating Ansible Roles
-**C.** Using Ansible Roles in Playbook
+**A.** Creating Ansible Playbook \n
+**B.** Creating Ansible Roles \n
+**C.** Using Ansible Roles in Playbook \n
 
 ### Prerequisites
 
-**1.** Ansible needs to be installed in master.
+**1.** Ansible needs to be installed in master. \n
 **2.** Connection between Master and Host needs to be set through ssh. For more information refer to the Ansible Installation Documentation.
 
 ## A) Creating Ansible Playbook
