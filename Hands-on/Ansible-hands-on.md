@@ -113,6 +113,60 @@ Great! We have successfully created our very first Ansible playbook.
 
 Remember that using playbook we can run the same command repeatedly, but if everything was configured on the first run, then all subsequent runs make no changes.
 
+### Final playbook
+
+```
+---
+- hosts: "{{ server }}"
+  become: yes
+  name: Play 1
+  gather_facts: yes
+  vars:
+    a: "hello"
+    b: "world"
+  tasks:
+    - name: Execute command ‘Date’
+      shell: date && hostname && echo "{{ a }}"
+      register: date_out
+      ignore_errors: yes
+
+    - name: Execute script on server
+      script: test_script.sh
+
+    - debug:
+        msg: "output: {{ item }}"
+      when: date_out.rc == 0
+      with_items: "{{date_out.stdout_lines }}"
+
+    - debug:
+        var: date_out.stdout_lines
+
+    - name: install tomcat
+      yum:
+        name: tomcat9
+        state: latest
+      when: ansible_distribution == "RHEL"
+
+    - name: install tomcat
+      apt:
+        name: tomcat9
+        state: latest
+        update_cache: yes
+      when: ansible_distribution == "Ubuntu"
+
+    - debug:
+        msg: "{{ item[0]}}: {{ item.1 }}"
+      with_together:
+      - ["date_output","server","print"]
+      - "{{date_out.stdout_lines }}"
+
+    - debug:
+        msg: "{{ item[0]}}: {{ item.1 }}"
+      with_nested:
+      - ["a", "b", "c"]
+      - [1,2,3] 
+```      
+
 ## B) Creating Ansible Roles
 
 ### Step 1: Ansible roles should be written inside "_/etc/ansible/roles/_ ". Use the following command to create one Ansible role.
