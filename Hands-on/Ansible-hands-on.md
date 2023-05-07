@@ -167,6 +167,9 @@ Remember that using playbook we can run the same command repeatedly, but if ever
       - [1,2,3] 
 ```      
 
+**Command**
+`ansible-playbook firstplaybook.yaml -e server=a-slave`
+
 ## B) Creating Ansible Roles
 
 ### Step 1: Ansible roles should be written inside "_/etc/ansible/roles/_ ". Use the following command to create one Ansible role.
