@@ -26,12 +26,40 @@
 
 [**Ansible Installation officical document**](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible-on-ubuntu)
 
+**Option 1 – from the Ubuntu 26.04 archive (simplest):**
+
 ```
 sudo apt update
-sudo apt install software-properties-common
-sudo apt-add-repository --yes --update ppa:ansible/ansible
-sudo apt install ansible
+sudo apt install -y ansible
 ```
+
+**Option 2 – from the official Ansible PPA (newer releases):**
+
+```
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository --yes --update ppa:ansible/ansible
+sudo apt install -y ansible
+```
+
+**Option 3 – with pipx (recommended when you need the very latest `ansible` package):**
+
+Ubuntu 26.04 ships a PEP 668 "externally managed" Python, so `pip install --user ansible`
+is blocked. Use `pipx` instead:
+
+```
+sudo apt update
+sudo apt install -y pipx
+pipx ensurepath
+pipx install --include-deps ansible
+```
+
+Verify the installation:
+
+`ansible --version`
+
+> **Note:** if the PPA does not yet publish packages for the Ubuntu 26.04 codename,
+> use Option 1 or Option 3.
 
 ![image](https://user-images.githubusercontent.com/37858762/236036904-9f71c528-8579-4f99-8f88-fd8aec54f826.png)
 
@@ -65,18 +93,21 @@ This playbook consists of two plays with following tasks:
   become: yes
   name: Play 1
   tasks:
-    - name: Execute command ‘Date’
-      command: date
+    - name: Execute command 'Date'
+      ansible.builtin.command: date
     - name: Execute script on server
-      script: test_script.sh
+      ansible.builtin.script: test_script.sh
 - hosts: host2
   name: Play 2
   become: yes
   tasks:
     - name: Execute script on server
-      script: test_script.sh
+      ansible.builtin.script: test_script.sh
     - name: Install nginx
-      apt: name=nginx state=latest
+      ansible.builtin.apt:
+        name: nginx
+        state: latest
+        update_cache: yes
 ```
 
 ![image](https://user-images.githubusercontent.com/37858762/236037045-83e67b55-851e-4a40-8ea3-99f2b3a137e5.png)
@@ -117,47 +148,56 @@ Remember that using playbook we can run the same command repeatedly, but if ever
     a: "hello"
     b: "world"
   tasks:
-    - name: Execute command ‘Date’
-      shell: date && hostname && echo "{{ a }}"
+    - name: Execute command 'Date'
+      ansible.builtin.shell: date && hostname && echo "{{ a }}"
       register: date_out
       ignore_errors: yes
 
     - name: Execute script on server
-      script: test_script.sh
+      ansible.builtin.script: test_script.sh
 
-    - debug:
+    - name: Show each output line
+      ansible.builtin.debug:
         msg: "output: {{ item }}"
       when: date_out.rc == 0
-      with_items: "{{date_out.stdout_lines }}"
+      with_items: "{{ date_out.stdout_lines }}"
 
-    - debug:
+    - name: Show the whole output
+      ansible.builtin.debug:
         var: date_out.stdout_lines
 
-    - name: install tomcat
-      yum:
-        name: tomcat9
+    - name: install tomcat (RHEL family)
+      ansible.builtin.dnf:
+        name: tomcat
         state: latest
-      when: ansible_distribution == "RHEL"
+      when: ansible_os_family == "RedHat"
 
-    - name: install tomcat
-      apt:
-        name: tomcat9
+    - name: install tomcat (Debian family)
+      ansible.builtin.apt:
+        name: tomcat10
         state: latest
         update_cache: yes
-      when: ansible_distribution == "Ubuntu"
+      when: ansible_os_family == "Debian"
 
-    - debug:
-        msg: "{{ item[0]}}: {{ item.1 }}"
+    - name: Pair the lists together
+      ansible.builtin.debug:
+        msg: "{{ item[0] }}: {{ item[1] }}"
       with_together:
-      - ["date_output","server","print"]
-      - "{{date_out.stdout_lines }}"
+      - ["date_output", "server", "print"]
+      - "{{ date_out.stdout_lines }}"
 
-    - debug:
-        msg: "{{ item[0]}}: {{ item.1 }}"
+    - name: Nested loop example
+      ansible.builtin.debug:
+        msg: "{{ item[0] }}: {{ item[1] }}"
       with_nested:
       - ["a", "b", "c"]
-      - [1,2,3] 
-```      
+      - [1, 2, 3]
+```
+
+> **Note:** `tomcat9` was dropped from the Ubuntu archive after 22.04 – use `tomcat10`
+> on Ubuntu 26.04. The `yum` module is deprecated in favour of `ansible.builtin.dnf`,
+> and `ansible_distribution == "RHEL"` never matches (the fact value is `RedHat`), so the
+> conditions above use `ansible_os_family` instead.
 
 **Command**
 `ansible-playbook firstplaybook.yaml -e server=a-slave`
@@ -195,10 +235,17 @@ Now we will divide the tasks to be performed into three categories. Install, con
 
 # tasks file for apache
 
-- include: install.yml
-- include: configure.yml
-- include: service.yml
+- name: Install apache
+  ansible.builtin.import_tasks: install.yml
+- name: Configure apache
+  ansible.builtin.import_tasks: configure.yml
+- name: Manage apache service
+  ansible.builtin.import_tasks: service.yml
 ```
+
+> **Note:** the bare `- include:` directive was deprecated in Ansible 2.4 and **removed**
+> in ansible-core 2.16. Use `import_tasks` (static, evaluated at parse time) or
+> `include_tasks` (dynamic, evaluated at run time) instead.
 
 ![image](https://user-images.githubusercontent.com/37858762/236037410-33d0d60b-d2e8-450c-9732-9327535077af.png)
 
@@ -213,7 +260,10 @@ We will install the latest version of apache2 in the remote machine with the hel
 ```
 ---
 - name: install apache2
-  apt: name=apache2 update_cache=yes state=latest
+  ansible.builtin.apt:
+    name: apache2
+    state: latest
+    update_cache: yes
 ```
 
 ![image](https://user-images.githubusercontent.com/37858762/236037454-1886c85c-4cfd-40a9-a873-89594befba09.png)
@@ -228,12 +278,16 @@ We will configure apache2.conf file in the remote machine and also, we will rest
 ---
 #configure apache2.conf and send copy.html file
   - name: apache2.conf file
-    copy: src=apache2.conf dest=/etc/apache2/
+    ansible.builtin.copy:
+      src: apache2.conf
+      dest: /etc/apache2/
     notify:
     - restart apache2 service
-    
+
   - name: send copy.html file
-    copy: src=index.html dest=/var/www/html/
+    ansible.builtin.copy:
+      src: index.html
+      dest: /var/www/html/
 ```
 
 ![image](https://user-images.githubusercontent.com/37858762/236037492-588bfd17-afaa-4cf8-8ce0-3d54d7d21ce1.png)
@@ -247,7 +301,10 @@ We will configure apache2.conf file in the remote machine
 ```
 ---
 - name: starting apache2 service
-  service: name=apache2 state=started
+  ansible.builtin.service:
+    name: apache2
+    state: started
+    enabled: yes
 ```
 
 ![image](https://user-images.githubusercontent.com/37858762/236037589-21139414-f0ab-4467-b0f5-1aca30266997.png)
@@ -285,7 +342,9 @@ Check whether our files are ready or not by using the following command.
 # handlers file for apache
 
 - name: restart apache2 service
-  service: name=apache2 state=restarted
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
 ```
 
 ![image](https://user-images.githubusercontent.com/37858762/236037682-92d646bd-aaf0-4428-91cc-3a44247528ce.png)
@@ -356,13 +415,17 @@ Add the following **.yml** file as shown.
   - hosts: servers
     become: yes
     tasks:
-    - debug:
+    - name: Message before the role
+      ansible.builtin.debug:
         msg: "before we run our role"
-    - import_role:
+    - name: Import the apache role
+      ansible.builtin.import_role:
         name: apache
-    - include_role:
+    - name: Include the apache role
+      ansible.builtin.include_role:
         name: apache
-    - debug:
+    - name: Message after the role
+      ansible.builtin.debug:
         msg: "after we ran our role"
 ```
 
